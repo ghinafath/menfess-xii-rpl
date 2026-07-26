@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --navy-950:#050810;
@@ -22,7 +22,7 @@
     --danger:#B45A5A;
     --success-ink:#3F5A4C;
     --font-display:'Fraunces', Georgia, serif;
-    --font-mono:'Space Mono','Courier New', monospace;
+    --font-mono:'Inter', -apple-system, sans-serif;
     --font-body:'Inter', -apple-system, sans-serif;
   }
 
@@ -443,7 +443,7 @@
       activeCard = null;
 
       if (!data || !data.length) {
-        container.innerHTML = `<p class="empty-note">${isApproved ? 'Belum ada yang di-post.' : 'Belum ada pesan baru.'}</p>`;
+        container.innerHTML = `<p class="empty-note">${isApproved ? 'blm ad yg dipost' : 'blm ad menfess baru'}</p>`;
         return;
       }
 
@@ -451,15 +451,15 @@
         const card = document.createElement('div');
         card.className = 'msg-card';
         card.innerHTML = `
-          <p class="msg-card__meta"><b>To</b> ${escapeHtml(item.to)} &nbsp;·&nbsp; <b>From</b> ${escapeHtml(item.from)}</p>
-          <p class="msg-card__time">time sent ${formatTimestamp(item.created_at)}</p>
+          <p class="msg-card__meta"><b>to</b> ${escapeHtml(item.to)} <b>from</b> ${escapeHtml(item.from)}</p>
+          <p class="msg-card__time">time: ${formatTimestamp(item.created_at)}</p>
           <p class="msg-card__body">${escapeHtml(item.message)}</p>
           <p class="msg-card__song">${item.song ? escapeHtml(item.song) : 'gaada request lagu'}</p>
           <div class="msg-card__actions">
-            <button class="chip-btn btn-preview">Preview Gambar</button>
+            <button class="chip-btn btn-preview">preview gambar</button>
             ${isApproved
               ? '<button class="chip-btn btn-unapprove">kembalikan ke pending</button>'
-              : '<button class="chip-btn chip-btn--approve btn-approve">tandai dipost</button>'}
+              : '<button class="chip-btn chip-btn--approve btn-approve">tandai di-post</button>'}
             <button class="chip-btn chip-btn--danger btn-delete">hapus</button>
           </div>
           <div class="msg-card__preview-slot" hidden></div>
@@ -476,8 +476,6 @@
       });
     }
 
-    // Pindahin canvas + tombol download ke slot preview card yang diklik.
-    // Klik lagi di card yang sama = tutup, balik ke holder.
     function togglePreview(card, item) {
       const slot = card.querySelector('.msg-card__preview-slot');
       const btn = card.querySelector('.btn-preview');
@@ -544,20 +542,20 @@
 
       currentMsg = data;
 
-      // 1. Draw Template
+      // 1. templet
       ctx.drawImage(templateImg, 0, 0);
 
-      // 2. Set Font Courier New Bold & Warna Hitam
+      // 2. set font courier n bold
       ctx.fillStyle = TEXT_CONFIG.color;
       ctx.font = `bold ${TEXT_CONFIG.fontSize}px "Courier New", Courier, monospace`;
       ctx.textBaseline = 'alphabetic';
       ctx._boldStrokeWidth = 1;
 
-      // 3. Render Teks Presisi di Dalam Kotak Kuning
+      // 3. render to sm from
       boldFillText(ctx, `to: ${data.to}`, TEXT_CONFIG.toX, TEXT_CONFIG.toY);
       boldFillText(ctx, `from: ${data.from}`, TEXT_CONFIG.fromX, TEXT_CONFIG.fromY);
 
-      // 4. Wrap Teks Message
+      // 4. wrap text mess
       const fullMessage = `message: ${data.message}`;
       wrapText(
         ctx, fullMessage,
@@ -565,9 +563,7 @@
         TEXT_CONFIG.messageMaxWidth, TEXT_CONFIG.messageLineHeight
       );
 
-      // 5. Kalau ada request lagu, tulis label "song:" doang (tanpa judul).
-      //    Judul lagunya ditempel manual pakai fitur Add Music stiker IG,
-      //    persis di posisi label ini.
+      // 5. render song req kl ad
       if (data.song && data.song.trim() !== '') {
         boldFillText(ctx, 'song:', TEXT_CONFIG.songX, TEXT_CONFIG.songY);
       }
@@ -576,11 +572,35 @@
     function wrapText(context, text, x, y, maxWidth, lineHeight) {
       const words = text.split(' ');
       let line = '';
+
       for (let n = 0; n < words.length; n++) {
-        let testLine = line + words[n] + ' ';
+        const word = words[n];
+
+        if (context.measureText(word).width > maxWidth) {
+          if (line) {
+            boldFillText(context, line, x, y);
+            y += lineHeight;
+            line = '';
+          }
+          let chunk = '';
+          for (const char of word) {
+            const testChunk = chunk + char;
+            if (context.measureText(testChunk).width > maxWidth && chunk) {
+              boldFillText(context, chunk, x, y);
+              y += lineHeight;
+              chunk = char;
+            } else {
+              chunk = testChunk;
+            }
+          }
+          line = chunk + ' ';
+          continue;
+        }
+
+        const testLine = line + word + ' ';
         if (context.measureText(testLine).width > maxWidth && n > 0) {
           boldFillText(context, line, x, y);
-          line = words[n] + ' ';
+          line = word + ' ';
           y += lineHeight;
         } else {
           line = testLine;
