@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>admin menfess xii-rpl</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-950:#050810;
+    --navy-900:#0A1020;
+    --navy-800:#111A32;
+    --navy-700:#1B2848;
+    --line:#2A3A63;
+    --champagne:#CBB88C;
+    --champagne-dim:#8C8265;
+    --mist:#9AA6C4;
+    --paper:#F3F1EA;
+    --danger:#B45A5A;
+    --success-ink:#3F5A4C;
+    --font-display:'Fraunces', Georgia, serif;
+    --font-mono:'Space Mono','Courier New', monospace;
+    --font-body:'Inter', -apple-system, sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    min-height:100vh;
+    font-family:var(--font-body);
+    color:var(--paper);
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(27,40,72,0.5), transparent 60%),
+      var(--navy-950);
+  }
+
+  a{ color:inherit; }
+
+  /* ---------- Toasts ---------- */
+  #toastContainer{
+    position:fixed; top:18px; left:50%; transform:translateX(-50%);
+    z-index:60; display:flex; flex-direction:column; gap:10px;
+    width:min(92vw,360px); align-items:center; pointer-events:none;
+  }
+  .toast{
+    display:flex; align-items:center; gap:10px; width:100%;
+    background:var(--navy-800); border:1px solid rgba(203,184,140,0.25);
+    color:var(--paper); border-radius:8px; padding:12px 14px; font-size:13.5px;
+    box-shadow:0 16px 34px rgba(0,0,0,0.5);
+    opacity:0; transform:translateY(-14px);
+    transition:opacity .25s ease, transform .25s ease;
+    pointer-events:auto;
+  }
+  .toast--visible{ opacity:1; transform:translateY(0); }
+  .toast__icon{
+    flex:0 0 auto; width:20px; height:20px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700;
+  }
+  .toast--success .toast__icon{ background:var(--champagne); color:var(--navy-950); }
+  .toast--error .toast__icon{ background:var(--danger); color:var(--paper); }
+
+  /* ---------- Login ---------- */
+  #loginSection{
+    max-width:380px;
+    margin:14vh auto 0;
+    padding:0 18px;
+  }
+  .panel{
+    background:linear-gradient(180deg, rgba(17,26,50,0.72), rgba(10,16,32,0.72));
+    border:1px solid rgba(203,184,140,0.16);
+    border-radius:14px;
+    padding:34px 30px 28px;
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    box-shadow:0 40px 80px -20px rgba(0,0,0,0.65);
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:0.16em;
+    font-size:10.5px;
+    color:var(--mist);
+    margin:0 0 14px;
+  }
+  .title{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:clamp(24px,6vw,30px);
+    line-height:1.1;
+    margin:0 0 22px;
+    color:var(--paper);
+  }
+  .field{ margin-bottom:18px; }
+  .field label{
+    display:block;
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    font-size:10px;
+    color:var(--champagne-dim);
+    margin-bottom:7px;
+  }
+  .field input{
+    width:100%;
+    border:none;
+    border-bottom:1px solid var(--line);
+    background:transparent;
+    font-family:var(--font-body);
+    font-size:14.5px;
+    color:var(--paper);
+    padding:5px 2px 9px;
+    transition:border-color .18s ease;
+  }
+  .field input[readonly]{ color:var(--mist); }
+  .field input:focus{ outline:none; border-bottom-color:var(--champagne); }
+  .field input:focus-visible,
+  .btn:focus-visible,
+  .icon-btn:focus-visible{
+    outline:2px solid var(--champagne);
+    outline-offset:3px;
+  }
+
+  .btn{
+    width:100%;
+    border:1px solid var(--champagne);
+    border-radius:7px;
+    background:transparent;
+    color:var(--champagne);
+    font-family:var(--font-mono);
+    font-weight:700;
+    letter-spacing:0.06em;
+    font-size:12.5px;
+    text-transform:uppercase;
+    padding:14px;
+    cursor:pointer;
+    transition:background .18s ease, color .18s ease, transform .1s ease;
+  }
+  .btn:hover{ background:var(--champagne); color:var(--navy-950); }
+  .btn:active{ transform:scale(0.99); }
+  .btn--solid{ background:var(--champagne); color:var(--navy-950); }
+  .btn--solid:hover{ background:#DDCBA1; }
+
+  /* ---------- Dashboard shell ---------- */
+  #dashboardSection{ display:none; }
+  .shell{
+    max-width:1080px;
+    margin:0 auto;
+    padding:40px 24px 60px;
+  }
+  .shell-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:16px;
+    margin-bottom:32px;
+    padding-bottom:20px;
+    border-bottom:1px solid rgba(203,184,140,0.18);
+  }
+  .shell-head .eyebrow{ margin-bottom:8px; }
+  .shell-head .title{ margin:0; }
+  .icon-btn{
+    border:1px solid rgba(180,90,90,0.5);
+    background:transparent;
+    color:#D69A9A;
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    border-radius:6px;
+    padding:9px 14px;
+    cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .icon-btn:hover{ background:var(--danger); color:var(--paper); }
+
+  .grid{
+    display:grid;
+    grid-template-columns:1.1fr 0.9fr;
+    gap:28px;
+    align-items:start;
+  }
+  @media (max-width:860px){
+    .grid{ grid-template-columns:1fr; }
+  }
+
+  .col-title{
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    font-size:11px;
+    color:var(--mist);
+    margin:0 0 14px;
+  }
+
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .tab-btn{
+    border:none;
+    background:transparent;
+    color:var(--mist);
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    font-size:11px;
+    padding:10px 4px 12px;
+    margin-bottom:-1px;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .tab-btn + .tab-btn{ margin-left:14px; }
+  .tab-btn:hover{ color:var(--paper); }
+  .tab-btn--active{
+    color:var(--champagne);
+    border-bottom-color:var(--champagne);
+  }
+
+  .msg-list{ display:flex; flex-direction:column; gap:12px; }
+  .msg-card{
+    background:linear-gradient(180deg, rgba(17,26,50,0.6), rgba(10,16,32,0.6));
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+  }
+  .msg-card__meta{
+    font-family:var(--font-body);
+    font-size:13px;
+    color:var(--paper);
+    margin:0 0 8px;
+  }
+  .msg-card__meta b{ color:var(--champagne); font-weight:600; }
+  .msg-card__body{
+    font-size:13.5px;
+    line-height:1.55;
+    color:var(--mist);
+    background:rgba(5,8,16,0.4);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:10px 12px;
+    margin:0 0 10px;
+  }
+  .msg-card__song{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--champagne-dim);
+    margin:0 0 12px;
+  }
+  .msg-card__actions{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip-btn{
+    flex:1;
+    min-width:110px;
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--paper);
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    border-radius:6px;
+    padding:9px 10px;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .chip-btn:hover{ border-color:var(--champagne); color:var(--champagne); }
+  .chip-btn--approve:hover{ border-color:#8FB39A; color:#8FB39A; }
+  .chip-btn--danger:hover{ border-color:var(--danger); color:#D69A9A; }
+
+  .empty-note{
+    font-size:13px;
+    color:var(--mist);
+    font-style:italic;
+  }
+
+  /* ---------- Canvas panel ---------- */
+  .canvas-panel{
+    background:linear-gradient(180deg, rgba(17,26,50,0.6), rgba(10,16,32,0.6));
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px;
+    position:sticky;
+    top:24px;
+  }
+  canvas{
+    max-width:100%;
+    height:auto;
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:block;
+    margin-bottom:12px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .toast, .btn, .icon-btn, .chip-btn{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="toastContainer" aria-live="polite"></div>
+
+  <!-- LOGIN -->
+  <div id="loginSection">
+    <div class="panel">
+      <p class="eyebrow">XII RPL</p>
+      <h1 class="title">login admin</h1>
+      <form id="loginForm">
+        <div class="field">
+          <label for="adminEmail">email admin</label>
+          <input type="email" id="adminEmail" placeholder="masukkan email admin" required>
+        </div>
+        <div class="field">
+          <label for="adminPassword">password</label>
+          <input type="password" id="adminPassword" placeholder="masukkan password" required>
+        </div>
+        <button type="submit" class="btn btn--solid">masuk dashboard</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboardSection">
+    <div class="shell">
+      <div class="shell-head">
+        <div>
+          <p class="eyebrow">XII RPL - dashboard</p>
+          <h1 class="title">incoming menfess</h1>
+        </div>
+        <button class="icon-btn" onclick="logout()">logout</button>
+      </div>
+
+      <div class="grid">
+        <div>
+          <div class="tabs">
+            <button class="tab-btn tab-btn--active" id="tabPending" onclick="switchTab('pending')">pending</button>
+            <button class="tab-btn" id="tabPosted" onclick="switchTab('posted')">sudah di-post</button>
+          </div>
+          <div id="pendingList" class="msg-list">
+            <p class="empty-note">memuat data...</p>
+          </div>
+        </div>
+
+        <div class="canvas-panel">
+          <p class="col-title">Preview Story</p>
+          <canvas id="menfessCanvas"></canvas>
+          <button class="btn" onclick="downloadImage()">download PNG story</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const _supabase = supabase.createClient("https://ywlfwcnxwqdqqmignuxl.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3bGZ3Y254d3FkcXFtaWdudXhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTAzNDMsImV4cCI6MjEwMDU2NjM0M30.e2VDLkdElC2fM5_pWeQSRa-3jF9cvPkjoHPaPWmeNZA");
+    const canvas = document.getElementById('menfessCanvas');
+    const ctx = canvas.getContext('2d');
+    const templateImg = new Image();
+    templateImg.src = 'template.png'; // File gambar template di folder proyek
+
+    let currentMsg = null;
+
+    const TEXT_CONFIG = {
+      toX: 147, toY: 830,
+      fromX: 147, fromY: 885,
+      messageX: 147, messageY: 955,
+      messageMaxWidth: 741,
+      messageLineHeight: 48,
+      songX: 147, songY: 1450,
+      fontSize: 34,
+      color: '#000000'
+    };
+
+    templateImg.onload = () => {
+      canvas.width = templateImg.width;
+      canvas.height = templateImg.height;
+    };
+
+    // ---------- Toast helper (replaces native alert()) ----------
+    function showToast(type, message, duration = 3500) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast--${type}`;
+      toast.innerHTML = `
+        <span class="toast__icon">${type === 'success' ? '✓' : '✕'}</span>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add('toast--visible'));
+      setTimeout(() => {
+        toast.classList.remove('toast--visible');
+        setTimeout(() => toast.remove(), 250);
+      }, duration);
+    }
+
+    async function checkSession() {
+      const { data: { session } } = await _supabase.auth.getSession();
+      if (session) showDashboard();
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('adminEmail').value;
+      const password = document.getElementById('adminPassword').value;
+
+      const { error } = await _supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        showToast('error', 'Password salah!');
+      } else {
+        showDashboard();
+      }
+    });
+
+    function showDashboard() {
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('dashboardSection').style.display = 'block';
+      loadMessages();
+    }
+
+    async function logout() {
+      await _supabase.auth.signOut();
+      location.reload();
+    }
+
+    let currentTab = 'pending';
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tabPending').classList.toggle('tab-btn--active', tab === 'pending');
+      document.getElementById('tabPosted').classList.toggle('tab-btn--active', tab === 'posted');
+      loadMessages();
+    }
+
+    async function loadMessages() {
+      const isApproved = currentTab === 'posted';
+      const { data } = await _supabase
+        .from('menfess')
+        .select('*')
+        .eq('is_approved', isApproved)
+        .order('created_at', { ascending: false });
+
+      const container = document.getElementById('pendingList');
+      container.innerHTML = '';
+
+      if (!data || !data.length) {
+        container.innerHTML = `<p class="empty-note">${isApproved ? 'Belum ada yang di-post.' : 'Belum ada pesan baru.'}</p>`;
+        return;
+      }
+
+      data.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'msg-card';
+        card.innerHTML = `
+          <p class="msg-card__meta"><b>To</b> ${escapeHtml(item.to)} &nbsp;·&nbsp; <b>From</b> ${escapeHtml(item.from)}</p>
+          <p class="msg-card__body">${escapeHtml(item.message)}</p>
+          <p class="msg-card__song">♪ ${item.song ? escapeHtml(item.song) : 'Tidak ada request lagu'}</p>
+          <div class="msg-card__actions">
+            <button class="chip-btn btn-preview">Preview Gambar</button>
+            ${isApproved
+              ? '<button class="chip-btn btn-unapprove">Kembalikan ke Pending</button>'
+              : '<button class="chip-btn chip-btn--approve btn-approve">Tandai Di-Post</button>'}
+            <button class="chip-btn chip-btn--danger btn-delete">Hapus</button>
+          </div>
+        `;
+
+        card.querySelector('.btn-preview').addEventListener('click', () => generateImage(item));
+        card.querySelector('.btn-delete').addEventListener('click', () => deleteMessage(item.id));
+        const approveBtn = card.querySelector('.btn-approve');
+        if (approveBtn) approveBtn.addEventListener('click', () => approveMessage(item.id));
+        const unapproveBtn = card.querySelector('.btn-unapprove');
+        if (unapproveBtn) unapproveBtn.addEventListener('click', () => unapproveMessage(item.id));
+
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str ?? '';
+      return div.innerHTML;
+    }
+
+    function boldFillText(context, text, x, y) {
+      context.lineJoin = 'round';
+      context.miterLimit = 2;
+      context.lineWidth = context._boldStrokeWidth || 2;
+      context.strokeStyle = TEXT_CONFIG.color;
+      context.strokeText(text, x, y);
+      context.fillText(text, x, y);
+    }
+
+    function generateImage(data) {
+      if (!templateImg.complete || templateImg.naturalWidth === 0) {
+        showToast('error', 'Template gambar belum kemuat, coba beberapa saat lagi.');
+        return;
+      }
+
+      currentMsg = data;
+
+      // 1. Draw Template
+      ctx.drawImage(templateImg, 0, 0);
+
+      // 2. Set Font Courier New Bold & Warna Hitam
+      ctx.fillStyle = TEXT_CONFIG.color;
+      ctx.font = `bold ${TEXT_CONFIG.fontSize}px "Courier New", Courier, monospace`;
+      ctx.textBaseline = 'alphabetic';
+      ctx._boldStrokeWidth = 1.5;
+
+      // 3. Render Teks Presisi di Dalam Kotak Kuning
+      boldFillText(ctx, `to: ${data.to}`, TEXT_CONFIG.toX, TEXT_CONFIG.toY);
+      boldFillText(ctx, `from: ${data.from}`, TEXT_CONFIG.fromX, TEXT_CONFIG.fromY);
+
+      // 4. Wrap Teks Message
+      const fullMessage = `message: ${data.message}`;
+      wrapText(
+        ctx, fullMessage,
+        TEXT_CONFIG.messageX, TEXT_CONFIG.messageY,
+        TEXT_CONFIG.messageMaxWidth, TEXT_CONFIG.messageLineHeight
+      );
+
+      // 5. Kalau ada request lagu, tulis label "song:" doang (tanpa judul).
+      //    Judul lagunya ditempel manual pakai fitur Add Music stiker IG,
+      //    persis di posisi label ini.
+      if (data.song && data.song.trim() !== '') {
+        boldFillText(ctx, 'song:', TEXT_CONFIG.songX, TEXT_CONFIG.songY);
+      }
+    }
+
+    function wrapText(context, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        let testLine = line + words[n] + ' ';
+        if (context.measureText(testLine).width > maxWidth && n > 0) {
+          boldFillText(context, line, x, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      boldFillText(context, line, x, y);
+    }
+
+    function downloadImage() {
+      if (!currentMsg) return showToast('error', 'pilih "preview gambar" dulu!');
+      try {
+        const link = document.createElement('a');
+        link.download = `menfess-${currentMsg.to}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error('Download error:', err);
+        showToast('error', 'gagal download. coba buka halaman ini lewat live server/hosting jgn double click file.');
+      }
+    }
+
+    async function approveMessage(id) {
+      await _supabase.from('menfess').update({ is_approved: true }).eq('id', id);
+      showToast('success', 'menfess ditandai sudah di-post!');
+      loadMessages();
+    }
+
+    async function unapproveMessage(id) {
+      await _supabase.from('menfess').update({ is_approved: false }).eq('id', id);
+      showToast('success', 'menfess dikembalikan ke pending.');
+      loadMessages();
+    }
+
+    async function deleteMessage(id) {
+      const { error } = await _supabase.from('menfess').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase delete error:', error);
+        showToast('error', 'gagal menghapus menfess.');
+        return;
+      }
+      showToast('success', 'menfess dihapus.');
+      loadMessages();
+    }
+
+    checkSession();
+  </script>
+</body>
+</html>
