@@ -40,7 +40,7 @@
 
   a{ color:inherit; }
 
-  /* ---------- toasts ---------- */
+  /* ---------- Toasts ---------- */
   #toastContainer{
     position:fixed; top:18px; left:50%; transform:translateX(-50%);
     z-index:60; display:flex; flex-direction:column; gap:10px;
@@ -178,23 +178,24 @@
   }
   .icon-btn:hover{ background:var(--danger); color:var(--paper); }
 
-  .grid{
-    display:grid;
-    grid-template-columns:1.1fr 0.9fr;
-    gap:28px;
-    align-items:start;
+  .msg-card__preview-slot{
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px dashed var(--line);
   }
-  @media (max-width:860px){
-    .grid{ grid-template-columns:1fr; }
+  .msg-card__preview-slot canvas{
+    max-width:100%;
+    height:auto;
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:block;
+    margin-bottom:10px;
   }
 
-  .col-title{
-    font-family:var(--font-mono);
-    text-transform:uppercase;
-    letter-spacing:0.1em;
-    font-size:11px;
+  .empty-note{
+    font-size:13px;
     color:var(--mist);
-    margin:0 0 14px;
+    font-style:italic;
   }
 
   .tabs{
@@ -224,7 +225,7 @@
     border-bottom-color:var(--champagne);
   }
 
-  .msg-list{ display:flex; flex-direction:column; gap:12px; }
+  .msg-list{ display:flex; flex-direction:column; gap:12px; max-width:640px; }
   .msg-card{
     background:linear-gradient(180deg, rgba(17,26,50,0.6), rgba(10,16,32,0.6));
     border:1px solid var(--line);
@@ -288,22 +289,6 @@
   }
 
   /* ---------- Canvas panel ---------- */
-  .canvas-panel{
-    background:linear-gradient(180deg, rgba(17,26,50,0.6), rgba(10,16,32,0.6));
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:18px;
-    position:sticky;
-    top:24px;
-  }
-  canvas{
-    max-width:100%;
-    height:auto;
-    border:1px solid var(--line);
-    border-radius:8px;
-    display:block;
-    margin-bottom:12px;
-  }
 
   @media (prefers-reduced-motion: reduce){
     .toast, .btn, .icon-btn, .chip-btn{ transition:none; }
@@ -344,22 +329,18 @@
         <button class="icon-btn" onclick="logout()">logout</button>
       </div>
 
-      <div class="grid">
-        <div>
-          <div class="tabs">
-            <button class="tab-btn tab-btn--active" id="tabPending" onclick="switchTab('pending')">pending</button>
-            <button class="tab-btn" id="tabPosted" onclick="switchTab('posted')">sudah di-post</button>
-          </div>
-          <div id="pendingList" class="msg-list">
-            <p class="empty-note">memuat data...</p>
-          </div>
-        </div>
+      <div class="tabs">
+        <button class="tab-btn tab-btn--active" id="tabPending" onclick="switchTab('pending')">pending</button>
+        <button class="tab-btn" id="tabPosted" onclick="switchTab('posted')">sudah di-post</button>
+      </div>
+      <div id="pendingList" class="msg-list">
+        <p class="empty-note">memuat data...</p>
+      </div>
 
-        <div class="canvas-panel">
-          <p class="col-title">preview story</p>
-          <canvas id="menfessCanvas"></canvas>
-          <button class="btn" onclick="downloadImage()">download PNG story</button>
-        </div>
+      <!-- Canvas & tombol download hidup di sini pas gak ada card yang lagi preview -->
+      <div id="canvasHolder" style="display:none">
+        <canvas id="menfessCanvas"></canvas>
+        <button class="btn" id="downloadBtn" onclick="downloadImage()">download PNG story</button>
       </div>
     </div>
   </div>
@@ -367,11 +348,14 @@
   <script>
     const _supabase = supabase.createClient("https://ywlfwcnxwqdqqmignuxl.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3bGZ3Y254d3FkcXFtaWdudXhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTAzNDMsImV4cCI6MjEwMDU2NjM0M30.e2VDLkdElC2fM5_pWeQSRa-3jF9cvPkjoHPaPWmeNZA");
     const canvas = document.getElementById('menfessCanvas');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const canvasHolder = document.getElementById('canvasHolder');
     const ctx = canvas.getContext('2d');
     const templateImg = new Image();
-    templateImg.src = 'template.png';
+    templateImg.src = 'template.png'; // File gambar template di folder proyek
 
     let currentMsg = null;
+    let activeCard = null;
 
     const TEXT_CONFIG = {
       toX: 147, toY: 830,
@@ -389,7 +373,7 @@
       canvas.height = templateImg.height;
     };
 
-    // ---------- toast helper (replaces native alert()) ----------
+    // ---------- Toast helper (replaces native alert()) ----------
     function showToast(type, message, duration = 3500) {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
@@ -454,6 +438,9 @@
 
       const container = document.getElementById('pendingList');
       container.innerHTML = '';
+      canvasHolder.appendChild(canvas);
+      canvasHolder.appendChild(downloadBtn);
+      activeCard = null;
 
       if (!data || !data.length) {
         container.innerHTML = `<p class="empty-note">${isApproved ? 'Belum ada yang di-post.' : 'Belum ada pesan baru.'}</p>`;
@@ -467,17 +454,18 @@
           <p class="msg-card__meta"><b>To</b> ${escapeHtml(item.to)} &nbsp;·&nbsp; <b>From</b> ${escapeHtml(item.from)}</p>
           <p class="msg-card__time">🕐 ${formatTimestamp(item.created_at)}</p>
           <p class="msg-card__body">${escapeHtml(item.message)}</p>
-          <p class="msg-card__song">♪ ${item.song ? escapeHtml(item.song) : 'gaada request lagu'}</p>
+          <p class="msg-card__song">♪ ${item.song ? escapeHtml(item.song) : 'Tidak ada request lagu'}</p>
           <div class="msg-card__actions">
-            <button class="chip-btn btn-preview">preview gambar</button>
+            <button class="chip-btn btn-preview">Preview Gambar</button>
             ${isApproved
-              ? '<button class="chip-btn btn-unapprove">balikin ke pending</button>'
-              : '<button class="chip-btn chip-btn--approve btn-approve">tandain udh dipost</button>'}
-            <button class="chip-btn chip-btn--danger btn-delete">hapus</button>
+              ? '<button class="chip-btn btn-unapprove">Kembalikan ke Pending</button>'
+              : '<button class="chip-btn chip-btn--approve btn-approve">Tandai Di-Post</button>'}
+            <button class="chip-btn chip-btn--danger btn-delete">Hapus</button>
           </div>
+          <div class="msg-card__preview-slot" hidden></div>
         `;
 
-        card.querySelector('.btn-preview').addEventListener('click', () => generateImage(item));
+        card.querySelector('.btn-preview').addEventListener('click', () => togglePreview(card, item));
         card.querySelector('.btn-delete').addEventListener('click', () => deleteMessage(item.id));
         const approveBtn = card.querySelector('.btn-approve');
         if (approveBtn) approveBtn.addEventListener('click', () => approveMessage(item.id));
@@ -486,6 +474,41 @@
 
         container.appendChild(card);
       });
+    }
+
+    // Pindahin canvas + tombol download ke slot preview card yang diklik.
+    // Klik lagi di card yang sama = tutup, balik ke holder.
+    function togglePreview(card, item) {
+      const slot = card.querySelector('.msg-card__preview-slot');
+      const btn = card.querySelector('.btn-preview');
+
+      if (activeCard === card) {
+        closeActivePreview();
+        return;
+      }
+
+      if (activeCard) closeActivePreview();
+
+      slot.hidden = false;
+      slot.appendChild(canvas);
+      slot.appendChild(downloadBtn);
+      canvasHolder.style.display = 'none';
+      activeCard = card;
+      btn.textContent = 'Tutup Preview';
+
+      generateImage(item);
+      slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function closeActivePreview() {
+      if (!activeCard) return;
+      const slot = activeCard.querySelector('.msg-card__preview-slot');
+      const btn = activeCard.querySelector('.btn-preview');
+      slot.hidden = true;
+      btn.textContent = 'Preview Gambar';
+      canvasHolder.appendChild(canvas);
+      canvasHolder.appendChild(downloadBtn);
+      activeCard = null;
     }
 
     function escapeHtml(str) {
@@ -515,7 +538,7 @@
 
     function generateImage(data) {
       if (!templateImg.complete || templateImg.naturalWidth === 0) {
-        showToast('error', 'template gambar belum kemuat... coba nnt lg yah');
+        showToast('error', 'Template gambar belum kemuat, coba beberapa saat lagi.');
         return;
       }
 
@@ -568,26 +591,53 @@
 
     function downloadImage() {
       if (!currentMsg) return showToast('error', 'pilih "preview gambar" dulu!');
-      try {
-        const link = document.createElement('a');
-        link.download = `menfess-${currentMsg.to}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-      } catch (err) {
-        console.error('Download error:', err);
-        showToast('error', 'gagal download. cb buka halaman ini lewat live server/hosting jgn double click file.');
-      }
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          showToast('error', 'gagal generate gambar.');
+          return;
+        }
+
+        const fileName = `menfess-${currentMsg.to}.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        // Di HP (termasuk iOS Safari yang gak dukung <a download>), pake share
+        // sheet bawaan — user tinggal pilih "Save Image", paling dekat sama
+        // "sekali tap langsung tersimpan".
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] });
+            return;
+          } catch (err) {
+            if (err.name === 'AbortError') return; // user batal, gapapa
+            console.error('Share error:', err);
+          }
+        }
+
+        // Fallback buat desktop / browser yang gak dukung Web Share API
+        try {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = fileName;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error('Download error:', err);
+          showToast('error', 'gagal download, coba tekan lama gambarnya buat simpan manual.');
+        }
+      }, 'image/png');
     }
 
     async function approveMessage(id) {
       await _supabase.from('menfess').update({ is_approved: true }).eq('id', id);
-      showToast('success', 'menfess ditandai sudah dipost!');
+      showToast('success', 'menfess ditandai sudah di-post!');
       loadMessages();
     }
 
     async function unapproveMessage(id) {
       await _supabase.from('menfess').update({ is_approved: false }).eq('id', id);
-      showToast('success', 'menfess dibalikin ke pending.');
+      showToast('success', 'menfess dikembalikan ke pending.');
       loadMessages();
     }
 
