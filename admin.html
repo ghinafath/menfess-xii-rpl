@@ -460,13 +460,11 @@
             ${isApproved
               ? '<button class="chip-btn btn-unapprove">kembalikan ke pending</button>'
               : '<button class="chip-btn chip-btn--approve btn-approve">tandai di-post</button>'}
-            <button class="chip-btn chip-btn--danger btn-delete">hapus</button>
           </div>
           <div class="msg-card__preview-slot" hidden></div>
         `;
 
         card.querySelector('.btn-preview').addEventListener('click', () => togglePreview(card, item));
-        card.querySelector('.btn-delete').addEventListener('click', () => deleteMessage(item.id));
         const approveBtn = card.querySelector('.btn-approve');
         if (approveBtn) approveBtn.addEventListener('click', () => approveMessage(item.id));
         const unapproveBtn = card.querySelector('.btn-unapprove');
@@ -658,17 +656,6 @@
     async function unapproveMessage(id) {
       await _supabase.from('menfess').update({ is_approved: false }).eq('id', id);
       showToast('success', 'menfess dikembalikan ke pending.');
-      loadMessages();
-    }
-
-    async function deleteMessage(id) {
-      const { error } = await _supabase.from('menfess').delete().eq('id', id);
-      if (error) {
-        console.error('Supabase delete error:', error);
-        showToast('error', 'gagal menghapus menfess.');
-        return;
-      }
-      showToast('success', 'menfess dihapus.');
       loadMessages();
     }
 
