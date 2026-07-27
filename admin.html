@@ -359,13 +359,20 @@
 
     const TEXT_CONFIG = {
       toX: 147, toY: 830,
-      fromX: 147, fromY: 885,
-      messageX: 147, messageY: 955,
+      fromX: 147,
+      messageX: 147,
       messageMaxWidth: 741,
       messageLineHeight: 48,
-      songX: 147, songY: 1450,
+      songX: 147,
       fontSize: 40,
-      color: '#000000'
+      minFontSize: 22,
+      color: '#000000',
+      // jarak ekstra antar section (to -> from -> message -> song)
+      sectionGap: 14,
+      // batas aman y paling bawah sebelum kotak kuning kepotong (sudut miring)
+      boxBottomLimit: 1470,
+      // auto-kecilin font kalo message-nya lebih panjang dari ini
+      shrinkThreshold: 280
     };
 
     templateImg.onload = () => {
@@ -532,6 +539,70 @@
       context.fillText(text, x, y);
     }
 
+    // Itung jumlah baris yang bakal dipake wrapText, tanpa benar-benar
+    // digambar. Dipake buat ngetes muat/enggaknya di berbagai font size.
+    function countWrappedLines(context, text, maxWidth) {
+      const words = text.split(' ');
+      let lines = 1;
+      let line = '';
+
+      for (let n = 0; n < words.length; n++) {
+        const word = words[n];
+
+        if (context.measureText(word).width > maxWidth) {
+          if (line) { lines++; line = ''; }
+          let chunk = '';
+          for (const char of word) {
+            const testChunk = chunk + char;
+            if (context.measureText(testChunk).width > maxWidth && chunk) {
+              lines++;
+              chunk = char;
+            } else {
+              chunk = testChunk;
+            }
+          }
+          line = chunk + ' ';
+          continue;
+        }
+
+        const testLine = line + word + ' ';
+        if (context.measureText(testLine).width > maxWidth && n > 0) {
+          lines++;
+          line = word + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      return lines;
+    }
+
+    // Cari font size paling gede yang bikin semua konten (to+from+message+song)
+    // masih muat sebelum boxBottomLimit. Cuma dipanggil kl message-nya panjang
+    // (> shrinkThreshold karakter) — kl enggak, tetep pake fontSize default.
+    function fitFontSize(data) {
+      const hasSong = !!(data.song && data.song.trim() !== '');
+      const sectionCount = hasSong ? 4 : 3;
+
+      for (let fs = TEXT_CONFIG.fontSize; fs >= TEXT_CONFIG.minFontSize; fs -= 2) {
+        const scale = fs / TEXT_CONFIG.fontSize;
+        const lineHeight = TEXT_CONFIG.messageLineHeight * scale;
+        const gap = TEXT_CONFIG.sectionGap * scale;
+
+        ctx.font = `bold ${fs}px "Courier New", Courier, monospace`;
+        const toLines = countWrappedLines(ctx, `to: ${data.to}`, TEXT_CONFIG.messageMaxWidth);
+        const fromLines = countWrappedLines(ctx, `from: ${data.from}`, TEXT_CONFIG.messageMaxWidth);
+        const msgLines = countWrappedLines(ctx, `message: ${data.message}`, TEXT_CONFIG.messageMaxWidth);
+        const songLines = hasSong ? 1 : 0;
+        const totalLines = toLines + fromLines + msgLines + songLines;
+
+        const totalHeight = totalLines * lineHeight + (sectionCount - 1) * gap;
+
+        if (fs === TEXT_CONFIG.minFontSize || TEXT_CONFIG.toY + totalHeight <= TEXT_CONFIG.boxBottomLimit) {
+          return { fontSize: fs, lineHeight, gap };
+        }
+      }
+    }
+
     function generateImage(data) {
       if (!templateImg.complete || templateImg.naturalWidth === 0) {
         showToast('error', 'Template gambar belum kemuat, coba beberapa saat lagi.');
@@ -543,30 +614,47 @@
       // 1. templet
       ctx.drawImage(templateImg, 0, 0);
 
-      // 2. set font courier n bold
+      // 2. set font courier n bold — auto-kecilin kl message kepanjangan
+      const shouldShrink = (data.message || '').length > TEXT_CONFIG.shrinkThreshold;
+      const fit = shouldShrink
+        ? fitFontSize(data)
+        : { fontSize: TEXT_CONFIG.fontSize, lineHeight: TEXT_CONFIG.messageLineHeight, gap: TEXT_CONFIG.sectionGap };
+
       ctx.fillStyle = TEXT_CONFIG.color;
-      ctx.font = `bold ${TEXT_CONFIG.fontSize}px "Courier New", Courier, monospace`;
+      ctx.font = `bold ${fit.fontSize}px "Courier New", Courier, monospace`;
       ctx.textBaseline = 'alphabetic';
       ctx._boldStrokeWidth = 1;
 
-      // 3. render to sm from
-      boldFillText(ctx, `to: ${data.to}`, TEXT_CONFIG.toX, TEXT_CONFIG.toY);
-      boldFillText(ctx, `from: ${data.from}`, TEXT_CONFIG.fromX, TEXT_CONFIG.fromY);
+      // 3. render to & from, wrapped biar gak keluar kotak kl kepanjangan
+      let cursorY = wrapText(
+        ctx, `to: ${data.to}`,
+        TEXT_CONFIG.toX, TEXT_CONFIG.toY,
+        TEXT_CONFIG.messageMaxWidth, fit.lineHeight
+      ) + fit.gap;
 
-      // 4. wrap text mess
+      cursorY = wrapText(
+        ctx, `from: ${data.from}`,
+        TEXT_CONFIG.fromX, cursorY,
+        TEXT_CONFIG.messageMaxWidth, fit.lineHeight
+      ) + fit.gap;
+
+      // 4. wrap text mess, nyambung otomatis dari bawah "from"
       const fullMessage = `message: ${data.message}`;
-      wrapText(
+      cursorY = wrapText(
         ctx, fullMessage,
-        TEXT_CONFIG.messageX, TEXT_CONFIG.messageY,
-        TEXT_CONFIG.messageMaxWidth, TEXT_CONFIG.messageLineHeight
-      );
+        TEXT_CONFIG.messageX, cursorY,
+        TEXT_CONFIG.messageMaxWidth, fit.lineHeight
+      ) + fit.gap;
 
-      // 5. render song req kl ad
+      // 5. render song req kl ad, nyambung otomatis dari bawah message
       if (data.song && data.song.trim() !== '') {
-        boldFillText(ctx, 'song:', TEXT_CONFIG.songX, TEXT_CONFIG.songY);
+        boldFillText(ctx, 'song:', TEXT_CONFIG.songX, cursorY);
       }
     }
 
+    // Balikin y posisi abis baris terakhir digambar, biar konten
+    // berikutnya (from/message/song) bisa nyambung otomatis di bawahnya
+    // dan gak numpuk/kepotong pas teksnya panjang.
     function wrapText(context, text, x, y, maxWidth, lineHeight) {
       const words = text.split(' ');
       let line = '';
@@ -605,6 +693,7 @@
         }
       }
       boldFillText(context, line, x, y);
+      return y + lineHeight;
     }
 
     function downloadImage() {
