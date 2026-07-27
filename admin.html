@@ -367,8 +367,10 @@
       fontSize: 40,
       minFontSize: 22,
       color: '#000000',
-      // jarak ekstra antar section (to -> from -> message -> song)
+      // jarak ekstra antar section (to -> from -> message)
       sectionGap: 14,
+      // jarak khusus sebelum "song" biar gak mepet ke message (lebih renggang)
+      songGap: 110,
       // batas aman y paling bawah sebelum kotak kuning kepotong (sudut miring)
       boxBottomLimit: 1470,
       // auto-kecilin font kalo message-nya lebih panjang dari ini
@@ -581,12 +583,12 @@
     // (> shrinkThreshold karakter) — kl enggak, tetep pake fontSize default.
     function fitFontSize(data) {
       const hasSong = !!(data.song && data.song.trim() !== '');
-      const sectionCount = hasSong ? 4 : 3;
 
       for (let fs = TEXT_CONFIG.fontSize; fs >= TEXT_CONFIG.minFontSize; fs -= 2) {
         const scale = fs / TEXT_CONFIG.fontSize;
         const lineHeight = TEXT_CONFIG.messageLineHeight * scale;
         const gap = TEXT_CONFIG.sectionGap * scale;
+        const songGap = TEXT_CONFIG.songGap * scale;
 
         ctx.font = `bold ${fs}px "Courier New", Courier, monospace`;
         const toLines = countWrappedLines(ctx, `to: ${data.to}`, TEXT_CONFIG.messageMaxWidth);
@@ -595,10 +597,11 @@
         const songLines = hasSong ? 1 : 0;
         const totalLines = toLines + fromLines + msgLines + songLines;
 
-        const totalHeight = totalLines * lineHeight + (sectionCount - 1) * gap;
+        // 2 gap normal (to->from, from->message) + 1 gap gede sebelum song
+        const totalHeight = totalLines * lineHeight + 2 * gap + (hasSong ? songGap : 0);
 
         if (fs === TEXT_CONFIG.minFontSize || TEXT_CONFIG.toY + totalHeight <= TEXT_CONFIG.boxBottomLimit) {
-          return { fontSize: fs, lineHeight, gap };
+          return { fontSize: fs, lineHeight, gap, songGap };
         }
       }
     }
@@ -618,7 +621,7 @@
       const shouldShrink = (data.message || '').length > TEXT_CONFIG.shrinkThreshold;
       const fit = shouldShrink
         ? fitFontSize(data)
-        : { fontSize: TEXT_CONFIG.fontSize, lineHeight: TEXT_CONFIG.messageLineHeight, gap: TEXT_CONFIG.sectionGap };
+        : { fontSize: TEXT_CONFIG.fontSize, lineHeight: TEXT_CONFIG.messageLineHeight, gap: TEXT_CONFIG.sectionGap, songGap: TEXT_CONFIG.songGap };
 
       ctx.fillStyle = TEXT_CONFIG.color;
       ctx.font = `bold ${fit.fontSize}px "Courier New", Courier, monospace`;
@@ -644,9 +647,9 @@
         ctx, fullMessage,
         TEXT_CONFIG.messageX, cursorY,
         TEXT_CONFIG.messageMaxWidth, fit.lineHeight
-      ) + fit.gap;
+      ) + fit.songGap;
 
-      // 5. render song req kl ad, nyambung otomatis dari bawah message
+      // 5. render song req kl ad, jaraknya lebih renggang biar gak mepet message
       if (data.song && data.song.trim() !== '') {
         boldFillText(ctx, 'song:', TEXT_CONFIG.songX, cursorY);
       }
